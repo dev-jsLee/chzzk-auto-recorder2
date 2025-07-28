@@ -256,34 +256,67 @@ class StreamRecorder:
     
     async def _monitor_recording(self, recording_info: RecordingInfo):
         """녹화 모니터링"""
+        last_file_size = 0
+        no_progress_count = 0
+        max_no_progress = 12  # 60초 동안 진행 없으면 문제로 판단 (5초 * 12)
+        
         while recording_info.is_active and self._ffmpeg_process:
             await asyncio.sleep(5)  # 5초마다 확인
             
             # 프로세스 상태 확인
             if self._ffmpeg_process.poll() is not None:
                 # 프로세스가 종료됨
-                _, stderr = self._ffmpeg_process.communicate()
+                try:
+                    _, stderr = self._ffmpeg_process.communicate(timeout=5)
+                    stderr_text = stderr.decode('utf-8', errors='ignore') if stderr else "No error output"
+                except subprocess.TimeoutExpired:
+                    stderr_text = "Communication timeout"
                 
                 if recording_info.status == RecordingStatus.STOPPING:
                     # 정상적인 중지
+                    logger.info("녹화 프로세스 정상 종료")
                     break
                 else:
                     # 예상치 못한 종료
-                    error_msg = f"FFmpeg 프로세스 예상치 못한 종료: {stderr}"
+                    error_msg = f"FFmpeg 프로세스 예상치 못한 종료: {stderr_text}"
                     recording_info.status = RecordingStatus.ERROR
                     recording_info.error_message = error_msg
                     
                     logger.error(error_msg)
+                    logger.info(f"마지막 파일 크기: {recording_info.file_size / 1024 / 1024:.1f}MB")
                     
                     if self._on_recording_error:
-                        self._on_recording_error(recording_info, StreamRecorderError(error_msg))
+                        try:
+                            if asyncio.iscoroutinefunction(self._on_recording_error):
+                                asyncio.create_task(self._on_recording_error(recording_info, StreamRecorderError(error_msg)))
+                            else:
+                                self._on_recording_error(recording_info, StreamRecorderError(error_msg))
+                        except Exception as callback_error:
+                            logger.error(f"Error callback 실행 중 오류: {callback_error}")
                     
                     break
             
-            # 파일 크기 업데이트
+            # 파일 크기 진행 상황 확인
             if recording_info.file_path.exists():
-                recording_info.file_size = recording_info.file_path.stat().st_size
-    
+                current_size = recording_info.file_path.stat().st_size
+                recording_info.file_size = current_size
+                
+                # 파일 크기 변화 확인 (진행 상황 모니터링)
+                if current_size > last_file_size:
+                    no_progress_count = 0  # 진행이 있으면 카운터 리셋
+                    logger.debug(f"녹화 진행 중: {current_size / 1024 / 1024:.1f}MB (+{(current_size - last_file_size) / 1024:.1f}KB)")
+                    last_file_size = current_size
+                else:
+                    no_progress_count += 1
+                    logger.debug(f"파일 크기 변화 없음: {no_progress_count}/{max_no_progress}")
+                    
+                    # 60초 동안 파일 크기 변화가 없으면 경고
+                    if no_progress_count >= max_no_progress:
+                        logger.warning(f"⚠️  60초 동안 녹화 진행 없음 (파일 크기: {current_size / 1024 / 1024:.1f}MB)")
+                        logger.warning("스트림 연결 문제 또는 방송 종료 가능성이 있습니다")
+                        # 에러로 처리하지 않고 계속 모니터링 (방송이 일시 중단될 수 있음)
+                        no_progress_count = 0  # 카운터 리셋하여 계속 체크
+
     def _build_ffmpeg_command(self, hls_url: str, output_path: Path) -> list[str]:
         """FFmpeg 명령 생성"""
         cmd = [
