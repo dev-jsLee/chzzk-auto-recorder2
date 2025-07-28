@@ -1,0 +1,59 @@
+# Git 관련
+.git
+.gitignore
+
+# 개발 환경
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.idea
+.vscode
+
+# 테스트 및 로그 파일
+test_recordings/
+*.log
+logs/
+recordings/
+
+# 환경설정 (보안상 제외)
+.env
+env.txt
+
+# 개발/테스트 스크립트
+test_*.py
+debug_*.py
+*_test.py
+
+# 문서
+*.md
+docs/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+*.bak
+
+# 임시 파일
+*.tmp
+*.temp
+*~
+
+# IDE 설정
+.project
+.pydevproject 

@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  chzzk-recorder:
+    build: .
+    image: chzzk-auto-recorder:latest
+    container_name: chzzk-recorder
+    hostname: chzzk-recorder
+    
+    # 재시작 정책
+    restart: unless-stopped
+    
+    # 환경변수 (실제 값은 .env 파일에서 로드)
+    environment:
+      - TZ=Asia/Seoul
+      - PYTHONUNBUFFERED=1
+      - CHZZK_CHANNEL_ID=${CHZZK_CHANNEL_ID}
+      - NID_AUT=${NID_AUT}
+      - NID_SES=${NID_SES}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+    
+    # 볼륨 마운트
+    volumes:
+      # 녹화 파일 저장소 (NAS 공유 폴더)
+      - /volume1/recordings/chzzk:/app/recordings
+      # 로그 파일 (NAS에서 모니터링 가능)
+      - /volume1/logs/chzzk:/app/logs
+      # 설정 파일 (필요시 외부에서 수정 가능)
+      - /volume1/config/chzzk:/app/config
+      # 환경변수 파일
+      - ./.env:/app/.env:ro
+    
+    # 포트 매핑 (향후 웹 인터페이스용)
+    ports:
+      - "18080:8080"  # 웹 관리 인터페이스
+      - "18081:8081"  # 상태 모니터링 API
+    
+    # 네트워크 설정
+    networks:
+      - chzzk-network
+    
+    # 헬스체크 (DSM에서 확인 가능)
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # 로그 설정
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    
+    # 리소스 제한 (NAS 리소스 보호)
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+# 네트워크 정의
+networks:
+  chzzk-network:
+    driver: bridge
+    name: chzzk-network
+
+# 볼륨 정의 (필요시)
+volumes:
+  chzzk-recordings:
+    name: chzzk-recordings
+  chzzk-logs:
+    name: chzzk-logs
+  chzzk-config:
+    name: chzzk-config 
