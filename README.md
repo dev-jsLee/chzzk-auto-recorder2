@@ -123,12 +123,38 @@ uv run python test_auto_recorder.py
 ```
 
 ### 백그라운드 실행
+
+**방법 1: nohup 사용**
 ```bash
 # nohup으로 백그라운드 실행
 nohup uv run python main.py > chzzk_recorder.log 2>&1 &
 
 # 실행 상태 확인
 tail -f chzzk_recorder.log
+```
+
+**방법 2: Screen 사용 (권장)**
+```bash
+# Linux/WSL 환경에서
+# 1. 실행 권한 부여
+chmod +x start_recorder.sh stop_recorder.sh status_recorder.sh
+
+# 2. 자동 녹화 시작
+./start_recorder.sh
+
+# 3. 상태 확인
+./status_recorder.sh
+
+# 4. 로그와 함께 상태 확인
+./status_recorder.sh --log
+
+# 5. 중지
+./stop_recorder.sh
+
+# 6. Screen 세션 직접 접속
+screen -r chzzk-recorder
+
+# 7. 세션에서 분리 (Ctrl+A, D)
 ```
 
 ## 🐳 Docker 배포 (구현 예정)
