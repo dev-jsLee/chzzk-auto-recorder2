@@ -268,6 +268,35 @@ class LiveMonitor:
             logger.warning("HLS URL을 찾을 수 없습니다")
             logger.debug(f"Full livePlayback content: {live_playback}")
             logger.debug(f"Raw livePlaybackJson: {content.get('livePlaybackJson', 'Not found')}")
+            
+            # 추가 시도: livePlaybackJson을 직접 파싱해서 재시도
+            live_playback_json_raw = content.get('livePlaybackJson')
+            if live_playback_json_raw and isinstance(live_playback_json_raw, str):
+                try:
+                    import json
+                    parsed_data = json.loads(live_playback_json_raw)
+                    logger.debug(f"Additional parsing attempt: {list(parsed_data.keys())}")
+                    
+                    # 파싱된 데이터에서 다시 시도
+                    def find_m3u8_in_parsed(obj):
+                        nonlocal hls_url
+                        if isinstance(obj, dict):
+                            for key, value in obj.items():
+                                if isinstance(value, str) and ".m3u8" in value:
+                                    logger.info(f"HLS URL 발견 (추가 파싱): {value}")
+                                    hls_url = value
+                                    return
+                                find_m3u8_in_parsed(value)
+                        elif isinstance(obj, list):
+                            for item in obj:
+                                find_m3u8_in_parsed(item)
+                    
+                    find_m3u8_in_parsed(parsed_data)
+                except Exception as parse_error:
+                    logger.debug(f"추가 파싱 실패: {parse_error}")
+            
+            if not hls_url:
+                logger.warning("모든 방법으로 HLS URL 추출에 실패했습니다")
         else:
             logger.info(f"최종 HLS URL: {hls_url}")
         

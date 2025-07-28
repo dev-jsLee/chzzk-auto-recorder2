@@ -189,12 +189,23 @@ class ChzzkAutoRecorder:
                 break
             except Exception as e:
                 logger.error(f"모니터링 루프 오류: {e}")
+                logger.debug(f"오류 상세 정보: {e.__class__.__name__}")
                 
-                if self._on_error:
-                    self._on_error(e)
-                
-                # 오류 시 30초 대기 후 재시도
-                await asyncio.sleep(30)
+                # 심각한 에러가 아닌 경우 계속 실행
+                if not isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    if self._on_error:
+                        try:
+                            self._on_error(e)
+                        except Exception as callback_error:
+                            logger.error(f"Error callback 실행 중 오류: {callback_error}")
+                    
+                    # 오류 시 짧은 대기 후 재시도 (30초 -> 10초로 단축)
+                    logger.info("10초 후 모니터링을 재시도합니다...")
+                    await asyncio.sleep(10)
+                else:
+                    # 심각한 에러의 경우 루프 종료
+                    logger.info("심각한 에러로 인해 모니터링을 중단합니다")
+                    break
     
     async def _handle_stream_start(self, stream_info: StreamInfo):
         """방송 시작 처리"""
@@ -211,7 +222,8 @@ class ChzzkAutoRecorder:
         
         # HLS URL 확인
         if not stream_info.hls_url:
-            logger.error("HLS URL을 찾을 수 없습니다")
+            logger.warning("HLS URL을 찾을 수 없습니다. 다음 폴링에서 다시 시도합니다.")
+            # 에러로 처리하지 않고 다음 폴링을 기다림
             return
         
         try:

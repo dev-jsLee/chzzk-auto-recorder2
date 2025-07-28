@@ -184,15 +184,58 @@ async def main():
         
         # 시스템 시작
         logger.info("🔄 시스템 시작 중...")
-        await auto_recorder.start()
+        
+        # 무한 루프로 시스템 재시작 가능하게 개선
+        max_restart_count = 5
+        restart_count = 0
+        
+        while restart_count < max_restart_count:
+            try:
+                await auto_recorder.start()
+                break  # 정상 종료시 루프 탈출
+                
+            except KeyboardInterrupt:
+                logger.info("🛑 사용자에 의해 중단됨")
+                break
+                
+            except AutoRecorderError as e:
+                logger.error(f"❌ 자동 녹화 시스템 오류: {e}")
+                restart_count += 1
+                if restart_count < max_restart_count:
+                    logger.info(f"🔄 30초 후 시스템을 재시작합니다 ({restart_count}/{max_restart_count})")
+                    await asyncio.sleep(30)
+                    
+                    # 새로운 인스턴스 생성
+                    auto_recorder = ChzzkAutoRecorder(
+                        channel_id=env_vars['channel_id'],
+                        nid_aut=env_vars['nid_aut'],
+                        nid_ses=env_vars['nid_ses'],
+                        config=config
+                    )
+                    auto_recorder.set_callbacks(
+                        on_recording_start=on_recording_start,
+                        on_recording_stop=on_recording_stop,
+                        on_status_change=on_status_change,
+                        on_error=on_error
+                    )
+                else:
+                    logger.error("최대 재시작 횟수에 도달했습니다")
+                    sys.exit(1)
+                    
+            except Exception as e:
+                logger.error(f"❌ 예상치 못한 오류: {e}")
+                logger.exception("상세한 오류 정보:")
+                restart_count += 1
+                if restart_count < max_restart_count:
+                    logger.info(f"🔄 60초 후 시스템을 재시작합니다 ({restart_count}/{max_restart_count})")
+                    await asyncio.sleep(60)
+                else:
+                    sys.exit(1)
         
     except KeyboardInterrupt:
         logger.info("🛑 사용자에 의해 중단됨")
-    except AutoRecorderError as e:
-        logger.error(f"❌ 자동 녹화 시스템 오류: {e}")
-        sys.exit(1)
     except Exception as e:
-        logger.error(f"❌ 예상치 못한 오류: {e}")
+        logger.error(f"❌ 초기화 오류: {e}")
         logger.exception("상세한 오류 정보:")
         sys.exit(1)
     finally:
